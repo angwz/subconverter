@@ -37,37 +37,6 @@ static inline void parse_json_pointer(nlohmann::json &json, const std::string &p
     }
 }
 
-/*
-std::string parseHostname(inja::Arguments &args)
-{
-    std::string data = args.at(0)->get<std::string>(), hostname;
-    const std::string matcher = R"(^(?i:hostname\s*?=\s*?)(.*?)\s$)";
-    string_array urls = split(data, ",");
-    if(!urls.size())
-        return std::string();
-
-    std::string input_content, output_content, proxy = parseProxy(global.proxyConfig);
-    for(std::string &x : urls)
-    {
-        input_content = webGet(x, proxy, global.cacheConfig);
-        regGetMatch(input_content, matcher, 2, 0, &hostname);
-        if(hostname.size())
-        {
-            output_content += hostname + ",";
-            hostname.clear();
-        }
-    }
-    string_array vArray = split(output_content, ",");
-    std::set<std::string> hostnames;
-    for(std::string &x : vArray)
-        hostnames.emplace(trim(x));
-    output_content = std::accumulate(hostnames.begin(), hostnames.end(), std::string(), [](std::string a, std::string b)
-    {
-        return std::move(a) + "," + std::move(b);
-    });
-    return output_content;
-}*/
-
 #ifndef NO_WEBGET
 std::string template_webGet(inja::Arguments &args)
 {
@@ -356,7 +325,6 @@ int renderClashScript(YAML::Node &base_rule, std::vector<RulesetContent> &rulese
         {
             if(x.rule_type == RULESET_CLASH_IPCIDR || x.rule_type == RULESET_CLASH_DOMAIN || x.rule_type == RULESET_CLASH_CLASSICAL)
             {
-                //rule_name = std::to_string(hash_(rule_group + rule_path));
                 rule_name = old_rule_name = findFileName(rule_path);
                 int idx = 2;
                 while(std::find(groups.begin(), groups.end(), rule_name) != groups.end())
@@ -377,7 +345,13 @@ int renderClashScript(YAML::Node &base_rule, std::vector<RulesetContent> &rulese
                     break;
                 }
                 if(!script)
-                    rules.emplace_back("RULE-SET," + rule_name + "," + rule_group);
+                {
+                    std::string rule_set_line = "RULE-SET," + rule_name + "," + rule_group;
+                    if (x.rule_type == RULESET_CLASH_IPCIDR && rule_set_line.find(",no-resolve") == std::string::npos) {
+                        rule_set_line += ",no-resolve";
+                    }
+                    rules.emplace_back(rule_set_line);
+                }
                 groups.emplace_back(rule_name);
                 continue;
             }
@@ -385,7 +359,6 @@ int renderClashScript(YAML::Node &base_rule, std::vector<RulesetContent> &rulese
             {
                 if(fileExist(rule_path, true) || isLink(rule_path))
                 {
-                    //rule_name = std::to_string(hash_(rule_group + rule_path));
                     rule_name = old_rule_name = findFileName(rule_path);
                     int idx = 2;
                     while(std::find(groups.begin(), groups.end(), rule_name) != groups.end())
@@ -396,8 +369,11 @@ int renderClashScript(YAML::Node &base_rule, std::vector<RulesetContent> &rulese
                     ruleset_interval[rule_name] = x.update_interval;
                     if(clash_classical_ruleset)
                     {
-                        if(!script)
-                            rules.emplace_back("RULE-SET," + rule_name + "," + rule_group);
+                        std::string rule_set_line = "RULE-SET," + rule_name + "," + rule_group;
+                        if (!script && x.rule_type == RULESET_CLASH_IPCIDR && rule_set_line.find(",no-resolve") == std::string::npos) {
+                            rule_set_line += ",no-resolve";
+                        }
+                        rules.emplace_back(rule_set_line);
                         groups.emplace_back(rule_name);
                         continue;
                     }
@@ -419,7 +395,6 @@ int renderClashScript(YAML::Node &base_rule, std::vector<RulesetContent> &rulese
             strStrm.clear();
             strStrm<<retrieved_rules;
             std::string::size_type lineSize;
-            bool has_no_resolve = false;
             while(getline(strStrm, strLine, delimiter))
             {
                 lineSize = strLine.size();
@@ -461,21 +436,21 @@ int renderClashScript(YAML::Node &base_rule, std::vector<RulesetContent> &rulese
                 else if(!has_ipcidr[rule_name] && (startsWith(strLine, "IP-CIDR,") || startsWith(strLine, "IP-CIDR6,")))
                 {
                     has_ipcidr[rule_name] = true;
-                    if(strLine.find(",no-resolve") != std::string::npos)
-                        has_no_resolve = true;
+                    if (strLine.find(",no-resolve") == std::string::npos) {
+                        strLine += ",no-resolve";
+                    }
                 }
             }
             if(has_domain[rule_name] && !script)
                 rules.emplace_back("RULE-SET," + rule_name + "_domain," + rule_group);
             if(has_ipcidr[rule_name] && !script)
-                {
-                    std::string rule_set_line = "RULE-SET," + rule_name + "_ipcidr," + rule_group;
-                    if (rule_set_line.find(",no-resolve") == std::string::npos)
-                    {
-                        rule_set_line += ",no-resolve";
-                    }
-                    rules.emplace_back(rule_set_line);
+            {
+                std::string rule_set_line = "RULE-SET," + rule_name + "_ipcidr," + rule_group;
+                if (rule_set_line.find(",no-resolve") == std::string::npos) {
+                    rule_set_line += ",no-resolve";
                 }
+                rules.emplace_back(rule_set_line);
+            }
 
             if(std::find(groups.begin(), groups.end(), rule_name) == groups.end())
                 groups.emplace_back(rule_name);
@@ -568,5 +543,6 @@ int renderClashScript(YAML::Node &base_rule, std::vector<RulesetContent> &rulese
     }
     else
         base_rule["rules"] = rules;
+
     return 0;
 }
