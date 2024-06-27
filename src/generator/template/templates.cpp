@@ -468,12 +468,15 @@ int renderClashScript(YAML::Node &base_rule, std::vector<RulesetContent> &rulese
             if(has_domain[rule_name] && !script)
                 rules.emplace_back("RULE-SET," + rule_name + "_domain," + rule_group);
             if(has_ipcidr[rule_name] && !script)
-            {
-                if(has_no_resolve)
-                    rules.emplace_back("RULE-SET," + rule_name + "_ipcidr," + rule_group + ",no-resolve");
-                else
-                    rules.emplace_back("RULE-SET," + rule_name + "_ipcidr," + rule_group);
-            }
+                {
+                    std::string rule_set_line = "RULE-SET," + rule_name + "_ipcidr," + rule_group;
+                    if (rule_set_line.find(",no-resolve") == std::string::npos)
+                    {
+                        rule_set_line += ",no-resolve";
+                    }
+                    rules.emplace_back(rule_set_line);
+                }
+
             if(std::find(groups.begin(), groups.end(), rule_name) == groups.end())
                 groups.emplace_back(rule_name);
         }
